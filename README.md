@@ -1,4 +1,4 @@
-BioPong: Biologically Iinspired Machine Learning
+BioPong: Biologically Inspired Machine Learning
 
 ![Animation](images/biopong_rallies.gif)
 
