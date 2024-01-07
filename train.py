@@ -123,9 +123,9 @@ def main():
     network = PlannerNet(rssm, decoder)
     train_mode = True
     train_steps = 10
-    save_checkpoint = False
+    save_checkpoint = True
     save_images = True
-     image_dir = 'game_images'
+    image_dir = 'game_images'
     game_images_indx = 0
 
     env = BioPong()
