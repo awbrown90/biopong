@@ -232,7 +232,7 @@ def sample_nll_indices(nlls, k):
     return sampled_indices
 
 
-def find_similar_traj(value_array, sample):
+def find_similar_traj(value_array, sample, time_steps):
 
     def calculate_difference(vec1, vec2, weight=0.1):
         """Calculate the Euclidean distance between two vectors."""

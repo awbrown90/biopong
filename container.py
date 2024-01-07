@@ -3,6 +3,7 @@ import sys
 import random
 import numpy as np
 import cv2
+import os
 
 class BioPong:
     def __init__(self):
@@ -39,12 +40,16 @@ class BioPong:
         
         self.reset_counter = 0
         self.reset_duration = 20
+        self.collision_count = 0
 
         self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
         self.clock = pygame.time.Clock()
         self.rally = 0
         self.in_a_row = -1
-        self.trajectory_surface = pygame.Surface((self.WIDTH, self.HEIGHT))
+        self.best_score = 0
+        self.trajectory_surface = pygame.Surface((self.WIDTH, self.HEIGHT), pygame.SRCALPHA)
+        self.trajectory_surface2 = pygame.Surface((self.WIDTH, self.HEIGHT), pygame.SRCALPHA)
+        self.random_start = False
     
     def reset(self):
         
@@ -54,6 +59,10 @@ class BioPong:
             self.ball_x, self.ball_y = random.randint(0, self.WIDTH - self.ball_size), random.randint(0, self.HEIGHT - self.ball_size)
             self.reset_counter -= 1
         else:
+            if self.random_start:
+                self.reset_ball_y = random.randint(0, self.HEIGHT - self.ball_size)
+                self.reset_ball_speed_y = random.choice([-5, 5])
+
             self.paddle_y = self.reset_paddle_y
             self.ball_x, self.ball_y = self.reset_ball_x, self.reset_ball_y
             self.ball_speed_x, self.ball_speed_y = self.reset_ball_speed_x, self.reset_ball_speed_y
@@ -81,6 +90,10 @@ class BioPong:
         self.reset_ball_y = self.ball_y
         #self.reset_ball_speed_x = self.ball_speed_x
         #self.reset_ball_speed_y = self.ball_speed_y
+
+    def render_text(self, text, x, y):
+        text_surface = self.font.render(str(text), True, (255, 255, 255))  # White text
+        self.screen.blit(text_surface, (x, y))
 
 
     def render(self, value1, value2, value3):
@@ -122,6 +135,15 @@ class BioPong:
         # Draw the ball
         pygame.draw.rect(self.screen, self.BLUE, (render_ball_x, render_ball_y, self.ball_size, self.ball_size))
 
+        screen_width = self.WIDTH
+        padding = 10
+        rally_text_width, _ = self.font.size('rally: '+str(self.rally))
+        in_a_row_text_width, _ = self.font.size('score: '+str(self.in_a_row))
+        best_score_text_width, _ = self.font.size('hi score: '+str(self.best_score))
+        self.render_text('rally: '+str(self.rally), screen_width - rally_text_width - padding, padding)
+        self.render_text('score: '+str(self.in_a_row), screen_width - in_a_row_text_width - padding, padding * 2 + 20)
+        self.render_text('hi score: '+str(self.best_score), screen_width - best_score_text_width - padding, padding * 3 + 40)
+
         pygame.display.flip()
 
         # Convert the Surface to a format compatible with OpenCV
@@ -138,7 +160,7 @@ class BioPong:
         self.screen.fill(self.BLACK)
 
         if trajs is None:
-             self.screen.blit(self.trajectory_surface, (0, 0))
+            self.screen.blit(self.trajectory_surface, (0, 0))
         else:
             for traj in trajs:
 
@@ -176,6 +198,15 @@ class BioPong:
         # Draw the ball
         pygame.draw.rect(self.screen, self.BLUE, (render_ball_x, render_ball_y, self.ball_size, self.ball_size))
 
+        screen_width = self.WIDTH
+        padding = 10
+        rally_text_width, _ = self.font.size('rally: '+str(self.rally))
+        in_a_row_text_width, _ = self.font.size('score: '+str(self.in_a_row))
+        best_score_text_width, _ = self.font.size('hi score: '+str(self.best_score))
+        self.render_text('rally: '+str(self.rally), screen_width - rally_text_width - padding, padding)
+        self.render_text('score: '+str(self.in_a_row), screen_width - in_a_row_text_width - padding, padding * 2 + 20)
+        self.render_text('hi score: '+str(self.best_score), screen_width - best_score_text_width - padding, padding * 3 + 40)
+
         pygame.display.flip()
 
         # Convert the Surface to a format compatible with OpenCV
@@ -188,7 +219,84 @@ class BioPong:
 
         return image_data
 
-    def render_traj(self, value1, value2, value3, trajs):
+    def render2_traj2(self, value11, value12, value13, value21, value22, value23, trajs1, trajs2):
+        self.screen.fill(self.BLACK)
+
+        self.trajectory_surface.fill(self.BLACK)
+        for traj in trajs1:
+            value1 = traj[0]
+            value2 = traj[1]
+            value3 = traj[2]
+
+            render_paddle_y = (value1+0.5) * self.HEIGHT
+            render_ball_x = (value2+0.5) * self.WIDTH
+            render_ball_y = (value3+0.5) * self.HEIGHT
+
+            # Draw the paddle
+            pygame.draw.rect(self.trajectory_surface, self.RED, (0, render_paddle_y, self.paddle_width, self.paddle_height))
+
+            # Draw the ball
+            pygame.draw.rect(self.trajectory_surface, self.RED, (render_ball_x, render_ball_y, self.ball_size, self.ball_size))
+    
+        for traj in trajs2:
+
+            value1 = traj[0]
+            value2 = traj[1]
+            value3 = traj[2]
+
+            render_paddle_y = (value1+0.5) * self.HEIGHT
+            render_ball_x = (value2+0.5) * self.WIDTH
+            render_ball_y = (value3+0.5) * self.HEIGHT
+
+            # Draw the paddle
+            pygame.draw.rect(self.trajectory_surface, self.GREEN, (0, render_paddle_y, self.paddle_width, self.paddle_height))
+
+            # Draw the ball
+            pygame.draw.rect(self.trajectory_surface, self.GREEN, (render_ball_x, render_ball_y, self.ball_size, self.ball_size))
+        self.screen.blit(self.trajectory_surface, (0, 0))
+        
+        render_paddle_y = (value11+0.5) * self.HEIGHT
+        render_ball_x = (value12+0.5) * self.WIDTH
+        render_ball_y = (value13+0.5) * self.HEIGHT
+
+        # Draw the paddle
+        pygame.draw.rect(self.screen, self.WHITE, (0, render_paddle_y, self.paddle_width, self.paddle_height))
+
+        # Draw the ball
+        pygame.draw.rect(self.screen, self.WHITE, (render_ball_x, render_ball_y, self.ball_size, self.ball_size))
+
+        render_paddle_y = (value21+0.5) * self.HEIGHT
+        render_ball_x = (value22+0.5) * self.WIDTH
+        render_ball_y = (value23+0.5) * self.HEIGHT
+
+        # Draw the paddle
+        pygame.draw.rect(self.screen, self.BLUE, (0, render_paddle_y, self.paddle_width, self.paddle_height))
+
+        # Draw the ball
+        pygame.draw.rect(self.screen, self.BLUE, (render_ball_x, render_ball_y, self.ball_size, self.ball_size))
+
+        screen_width = self.WIDTH
+        padding = 10
+        rally_text_width, _ = self.font.size('rally: '+str(self.rally))
+        in_a_row_text_width, _ = self.font.size('score: '+str(self.in_a_row))
+        best_score_text_width, _ = self.font.size('hi score: '+str(self.best_score))
+        self.render_text('rally: '+str(self.rally), screen_width - rally_text_width - padding, padding)
+        self.render_text('score: '+str(self.in_a_row), screen_width - in_a_row_text_width - padding, padding * 2 + 20)
+        self.render_text('hi score: '+str(self.best_score), screen_width - best_score_text_width - padding, padding * 3 + 40)
+
+        pygame.display.flip()
+        
+        # Convert the Surface to a format compatible with OpenCV
+        image_data = pygame.surfarray.array3d(self.screen)
+        image_data = np.transpose(image_data, (1, 0, 2))
+        image_data = cv2.cvtColor(image_data, cv2.COLOR_RGB2BGR)
+
+        # Tick the clock
+        self.clock.tick(60)
+
+        return image_data
+
+    def render_traj(self, value1, value2, value3, trajs1, trajs2):
         self.screen.fill(self.BLACK)
 
         render_paddle_y = (value1+0.5) * self.HEIGHT
@@ -202,7 +310,7 @@ class BioPong:
         pygame.draw.rect(self.screen, self.WHITE, (render_ball_x, render_ball_y, self.ball_size, self.ball_size))
 
         self.trajectory_surface.fill(self.BLACK)
-        for traj in trajs:
+        for traj in trajs1:
 
             value1 = traj[0]
             value2 = traj[1]
@@ -218,6 +326,24 @@ class BioPong:
             # Draw the ball
             pygame.draw.rect(self.trajectory_surface, self.RED, (render_ball_x, render_ball_y, self.ball_size, self.ball_size))
         self.screen.blit(self.trajectory_surface, (0, 0))
+
+        self.trajectory_surface2.fill(self.BLACK)
+        for traj in trajs2:
+
+            value1 = traj[0]
+            value2 = traj[1]
+            value3 = traj[2]
+
+            render_paddle_y = (value1+0.5) * self.HEIGHT
+            render_ball_x = (value2+0.5) * self.WIDTH
+            render_ball_y = (value3+0.5) * self.HEIGHT
+
+            # Draw the paddle
+            pygame.draw.rect(self.trajectory_surface2, self.GREEN, (0, render_paddle_y, self.paddle_width, self.paddle_height))
+
+            # Draw the ball
+            pygame.draw.rect(self.trajectory_surface2, self.GREEN, (render_ball_x, render_ball_y, self.ball_size, self.ball_size))
+        self.screen.blit(self.trajectory_surface2, (0, 0))
 
         pygame.display.flip()
 
@@ -275,6 +401,15 @@ class BioPong:
 
             # Draw the ball
             pygame.draw.rect(self.screen, self.GREEN, (render_ball_x, render_ball_y, self.ball_size, self.ball_size))
+
+        screen_width = self.WIDTH
+        padding = 10
+        rally_text_width, _ = self.font.size('rally: '+str(self.rally))
+        in_a_row_text_width, _ = self.font.size('score: '+str(self.in_a_row))
+        best_score_text_width, _ = self.font.size('hi score: '+str(self.best_score))
+        self.render_text('rally: '+str(self.rally), screen_width - rally_text_width - padding, padding)
+        self.render_text('score: '+str(self.in_a_row), screen_width - in_a_row_text_width - padding, padding * 2 + 20)
+        self.render_text('hi score: '+str(self.best_score), screen_width - best_score_text_width - padding, padding * 3 + 40)
 
         pygame.display.flip()
 
@@ -359,17 +494,20 @@ class BioPong:
         if self.ball_y <= 0 or self.ball_y + self.ball_size >= self.HEIGHT:
             self.ball_speed_y = -self.ball_speed_y
 
-        if self.ball_x <= self.paddle_width and (self.paddle_y <= self.ball_y <= self.paddle_y + self.paddle_height):
+        if self.collision_count:
+            self.collision_count-=1
+
+        if self.collision_count == 0 and self.ball_x <= self.paddle_width and (self.paddle_y <= self.ball_y <= self.paddle_y + self.paddle_height):
             self.ball_speed_x = -self.ball_speed_x
+            self.collision_count = 5
 
         # Bounce off the right wall
         if self.ball_x + self.ball_size >= self.WIDTH:
             self.ball_speed_x = -self.ball_speed_x
             self.rally += 1
             self.in_a_row += 1
-            #if self.in_a_row > 0:
-            #    print('set checkpoint')
-            #    self.checkpoint()
+            if self.in_a_row > self.best_score:
+                self.best_score = self.in_a_row
 
         # Reset the ball position if it goes past the paddle
         if self.ball_x < 0:
@@ -378,7 +516,7 @@ class BioPong:
             self.in_a_row = -1
 
     def _get_score(self):
-        return self.rally, self.in_a_row
+        return self.rally, self.in_a_row, self.best_score
     
     def _get_state(self):
         self.screen.fill(self.BLACK)

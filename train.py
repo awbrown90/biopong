@@ -9,6 +9,7 @@ from tensorflow.keras import layers, models
 from tqdm import tqdm
 import random
 from utils import *
+import cv2
 
 # Set up TensorFlow environment and other configurations
 import absl.logging
@@ -32,7 +33,7 @@ modules = [decoder, rssm, encoder]
 config_model_opt =  {'opt': 'adam', 'lr': 1e-4, 'eps': 1e-5, 'clip': 100, 'wd': 1e-6}
 rssm_optimizer = rssm_common.Optimizer('rssm', **config_model_opt)
 
-checkpoint_dir = './checkpoints_dir_vae'
+checkpoint_dir = './checkpoints_dir'
 checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
 checkpoint = tf.train.Checkpoint(rssm_optimizer=rssm_optimizer,
                                  decoder=decoder,
@@ -75,17 +76,27 @@ class PlannerNet():
         elif mode == 1:
             future_states1 = imagine_actions(prior, action_tensors, self.decoder, self.rssm, "imagine_1")
             tensor_future_array1 = batch_process_future_states(future_states1, sdr_24bit_basis, temperature=0.01)
+            
             future_states2 = imagine_actions(prior, action_tensors, self.decoder, self.rssm, "imagine_2")
             tensor_future_array2 = batch_process_future_states(future_states2, sdr_24bit_basis, temperature=0.01)
 
-            differences = tf.reduce_sum(tf.abs(tensor_future_array1 - tensor_future_array2),axis=[1, 2])
+            differences = tf.reduce_sum(tf.abs(tensor_future_array1 - tensor_future_array2), axis=[1, 2])
 
-            min_difference_index = tf.argmin(differences, axis=0)
+            max_difference_index = tf.argmax(differences, axis=0)
+            
+            target_value = 0.1 * differences[max_difference_index]
 
-            selected_action = tf.gather(action_tensors, min_difference_index)
+            abs_diff_from_target = tf.abs(differences - target_value)
+            inversed_diffs = 1000 - abs_diff_from_target
+            probabilities = tf.nn.softmax(inversed_diffs, axis=0)
+            log_probs = tf.math.log(probabilities)
+            sampled_index = tf.random.categorical(log_probs[tf.newaxis,:], 1)
+            sampled_index = tf.reshape(sampled_index, [])
 
-            sel_future_array1 = tensor_future_array1[min_difference_index]-0.5
-            sel_future_array2 = tensor_future_array2[min_difference_index]-0.5
+            selected_action = tf.gather(action_tensors, sampled_index)
+
+            sel_future_array1 = tensor_future_array1[sampled_index]-0.5
+            sel_future_array2 = tensor_future_array2[sampled_index]-0.5
 
         return differences, selected_action, sel_future_array1, sel_future_array2
 
@@ -110,12 +121,19 @@ def main():
     train_rallies = 200
 
     network = PlannerNet(rssm, decoder)
-    train_mode = False
+    train_mode = True
     train_steps = 10
     save_checkpoint = False
+    save_images = True
+     image_dir = 'game_images'
+    game_images_indx = 0
 
     env = BioPong()
     state = env.reset()
+
+    # Ensure the directory exists
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
     while current_rally < train_rallies:
 
         if len(pred_action_seq) > 0:
@@ -133,10 +151,10 @@ def main():
         frame_list.append(sdr_state)
         value_list.append(next_state)
 
-        rally, score = env._get_score()
+        rally, score, hi_score = env._get_score()
         if rally != current_rally:
             current_rally = rally
-            print(f'rally: {current_rally}, score: {score}')
+            print(f'rally: {current_rally}, score: {score}, hi score: {hi_score}')
             writer.add_scalar('score', score, rally)
 
             if train_mode and len(frame_list) > 2*time_steps:
@@ -181,7 +199,7 @@ def main():
                         frame_array = np.array(frame_list)
                         action_array = np.array(action_list)
 
-                        start_indices = find_similar_traj(np.array(value_list), sample = batch_size//2)
+                        start_indices = find_similar_traj(np.array(value_list), batch_size//2, time_steps)
                         start_indices = np.append(start_indices,np.random.randint(0, len(frame_array) - time_steps, batch_size//2))
                     
                         batched_experience_list = [frame_array[idx:idx + time_steps] for idx in start_indices]
@@ -194,7 +212,7 @@ def main():
                             model_loss, kl_loss, nll_loss = compute_loss(x_traj, act_traj, rssm, decoder, encoder)
                         
                         rssm_optimizer(tape, model_loss, modules)
-                    
+    
                 best_cost = None
                 best_action_seq = None
 
@@ -207,13 +225,21 @@ def main():
                 is_first = tf.zeros([actions_shape[0], actions_shape[1]], dtype=tf.bool)
 
                 init_state, prior, nll_loss = imagine_init(x, act, is_first, decoder, encoder, rssm)
+                output_array = continous_sdr_to_array(init_state, sdr_24bit_basis)
                 nll_list.append(nll_loss)
 
-                cost, action_seq, output1, output2 = network.call(prior, sdr_24bit_basis, exploration_actions, mode=0)
+                cost, action_seq, output1, output2 = network.call(prior, sdr_24bit_basis, exploration_actions, mode=1)
                 for action in action_seq[:20]:
                     pred_action_seq.append(action)
+                
+                game_image = env.render2_traj2(next_state[0], next_state[1], next_state[2], output_array[0], output_array[1], output_array[2], output1, output2)
+                
+                if save_images:
+                    image_path = os.path.join(image_dir, f'image_{game_images_indx}.png')
 
-                env.render_traj(next_state[0],next_state[1],next_state[2], output1)
+                    # Save the image
+                    cv2.imwrite(image_path, game_image)
+                    game_images_indx += 1
                 
             else:
                 actions_shape = tf.shape(act)
