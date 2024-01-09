@@ -28,3 +28,14 @@ rssm_common - Contains all the tensorflow code to run and use the rssm network. 
 container.py - Contains the code to run the BioPong environment with pygame
 
 utils.py - Helper functions for train.py
+
+Video Results:
+
+RSSM Constant Start
+https://www.youtube.com/watch?v=YhJnzhTubUM
+
+RSSM Random Start
+https://www.youtube.com/watch?v=YhJnzhTubUM
+
+Perfect Model
+https://www.youtube.com/watch?v=xiTmwXOv4G0
